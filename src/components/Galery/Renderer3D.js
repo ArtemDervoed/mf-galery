@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import normalizeWheel from 'normalize-wheel';
 import gsap from 'gsap';
+import images from './hotGirls';
 
 import Card from './Card';
 
@@ -13,8 +14,10 @@ Number.prototype.map = function(in_min, in_max, out_min, out_max) {
 export default class Renderer3D {
   constructor(dom) {
     this.dom = dom;
+    this.textures = [];
 
-    this.currentScroll = 0;
+    this.currentScrollZ = 0;
+    this.mouse = new THREE.Vector3(0, 0, 0)
     
     // Границы
     this.farPos = 0;
@@ -33,15 +36,13 @@ export default class Renderer3D {
     // Координаты
     this.pos = new THREE.Vector3(0, 0, this.farPos);
 
-    this.mousepos = new THREE.Vector2(0);
-    this.mouseMovePos = new THREE.Vector2(0);
 
     this.light = new THREE.AmbientLight( 0xffffff );
     this.scene.add(this.light);
 
     this.cards = [];
 
-    this.collsCount = 20;
+    this.collsCount = 10;
     this.rowsCount = 10;
 
     this.vMargn = 50;
@@ -50,23 +51,27 @@ export default class Renderer3D {
     this.cardHeight = 150;
     this.cardWidth = 115;
 
-    for (let i = 0; i < this.collsCount; i += 1) {
-      const x = (i - this.collsCount / 2) * (this.cardWidth + this.vMargn);
-      for (let j = 0; j < this.rowsCount; j += 1) {
-        const y = (j - this.rowsCount / 2) * (this.cardHeight + this.hMargn);
-        const card = new Card(
-          new THREE.Vector3(x, y, this.pos.z),
-          { width: this.cardWidth, height: this.cardHeight},
-          new THREE.Color(
-            Math.random(),
-            Math.random(),
-            Math.random(),
-          )
-        );
-        this.scene.add(card.getCard());
-        this.cards.push(card);
+    const loadManager = new THREE.LoadingManager();
+    const loader = new THREE.TextureLoader(loadManager);
+    images.forEach(url => {
+      this.textures.push(loader.load(url));
+    });
+
+    loadManager.onLoad = () => {
+      for (let i = 0; i < this.collsCount; i += 1) {
+        const x = (i - this.collsCount / 2) * (this.cardWidth + this.vMargn);
+        for (let j = 0; j < this.rowsCount; j += 1) {
+          const y = (j - this.rowsCount / 2) * (this.cardHeight + this.hMargn);
+          const card = new Card(
+            new THREE.Vector3(x, y, this.pos.z),
+            { width: this.cardWidth, height: this.cardHeight},
+            this.textures[THREE.MathUtils.randInt(0, this.textures.length - 1)]
+          );
+          this.scene.add(card.getCard());
+          this.cards.push(card);
+        }
       }
-    }
+    };
 
     this.dom.addEventListener('wheel', this.handleWheel);
     this.dom.addEventListener('mousedown', this.handleMouseDown);
@@ -79,8 +84,8 @@ export default class Renderer3D {
   handleWheel = (e) => {
     const normalized = normalizeWheel(e);
     const { pixelY } = normalized;
-    this.currentScroll = THREE.MathUtils.clamp(this.currentScroll + pixelY, this.farPos, this.nearPos);
-    const finalPos = THREE.MathUtils.lerp(this.farPos, this.nearPos, this.currentScroll / 250);
+    this.currentScrollZ = THREE.MathUtils.clamp(this.currentScrollZ + pixelY, this.farPos, this.nearPos);
+    const finalPos = THREE.MathUtils.lerp(this.farPos, this.nearPos, this.currentScrollZ / 250);
 
     gsap.to(this, {
       duration: 0.5,
@@ -90,38 +95,66 @@ export default class Renderer3D {
   }
 
   handleMouseDown = (e) => {
-    this.mousepos.setX(e.x);
-    this.mousepos.setY(e.y);
+    // this.prevPosX = e.x;
+    // this.prevPosY = e.y;
     this.dom.addEventListener('mousemove', this.handleMouseMove);
   }
 
   handleMouseUp = () => {
     // console.log('up');
-    this.mousepos.setX(0);
-    this.mousepos.setY(0);
+    // this.mousepos.setX(0);
+    // this.mousepos.setY(0);
     this.dom.removeEventListener('mousemove', this.handleMouseMove);
   }
 
-  handleMouseMove = (e) => {
-    // console.log(e, 'move');
-    this.mouseMovePos.x = e.x;
-    this.mouseMovePos.y = e.y;
+  handleMouseMove = (event) => {
+    const { width, height } = this.dom.getBoundingClientRect();
+    this.mouse.x = (event.clientX / width) * 2 - 1;
+    this.mouse.y = -(event.clientY / height) * 2 + 1;
 
-    this.dx = (this.mouseMovePos.x - this.mousepos.x);
-    this.dy = -(this.mouseMovePos.y - this.mousepos.y);
-
-    this.cards.forEach(c => {
-      gsap.to(c.plane.position, {
-        duration: 0.5,
-        x: (c.plane.position.x + this.dx),
-        y: (c.plane.position.y + this.dy),
-        overwrite: 5,
-      })
-      // c.plane.position.x += this.dx;
-      // c.plane.position.y += this.dy;
+    gsap.to(this.mouse, {
+      duration: 0.5,
+      x: (event.clientX / width) * 2 - 1,
+      y: -(event.clientY / height) * 2 + 1,
+      overwrite: 5,
     })
 
-    // const finalPos = THREE.MathUtils.lerp(0, 10, this.currentScroll / 250);
+    
+    // console.log(e, 'move');
+    // this.prevPosX = this.currentPosX;
+    // this.prevPosY = this.currentPosY;
+    // this.currentPosX = e.x;
+    // this.currentPosY = e.y;
+
+    // const dx = -(this.prevPosX - this.currentPosX);
+    // const dy = -(this.prevPosY - this.currentPosY);
+
+    // this.currentScrollX += dx;
+    // this.currentScrollY += dy;
+
+    // const finalPosX = THREE.MathUtils.lerp(-100, 100, this.currentScrollX);
+    // const finalPosY = THREE.MathUtils.lerp(-100, 100, this.currentScrollY);
+
+    // gsap.to(this, {
+    //   duration: 0.5,
+    //   finalPosX,
+    //   finalPosY,
+    //   overwrite: 5,
+    // })
+
+    // console.log(this.currentScrollX, this.currentScrollY);
+    // this.cards.forEach(c => {
+    //   gsap.to(c.plane.position, {
+    //     duration: 0.5,
+    //     x: (c.plane.position.x + this.dx),
+    //     y: (c.plane.position.y + this.dy),
+    //     overwrite: 5,
+    //   })
+      // c.plane.position.x += this.dx;
+      // c.plane.position.y += this.dy;
+    // })
+
+    // const finalPos = THREE.MathUtils.lerp(0, 10, this.currentScrollZ / 250);
 
     // console.log(dx, dy);
     // this.mousepos.add());
@@ -137,6 +170,8 @@ export default class Renderer3D {
       c.update(this.pos);
     })
     this.pos.z = this.finalPos;
+    this.pos.x = this.mouse.x;
+    this.pos.y = this.mouse.y;
     // this.pos.x = this.dx;
     // this.pos.y = this.dy;
     
